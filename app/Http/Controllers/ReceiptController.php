@@ -67,9 +67,11 @@ class ReceiptController extends Controller
             // Close the client
             $imageAnnotator->close();
 
-            // past to AI
+            // past to AI Haiku 3 (Claude)
             $structuredData = $this->processWithAIHaiku($extractedText);
-            //$structuredData = $this->processWithAILlama($extractedText);
+
+            // past to AI Llama (Together.ai)
+            $structuredData = $this->processWithAILlama($extractedText);
 
             dd($structuredData);
 
