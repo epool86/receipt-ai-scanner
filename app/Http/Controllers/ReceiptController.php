@@ -68,7 +68,8 @@ class ReceiptController extends Controller
             $imageAnnotator->close();
 
             // past to AI
-            $structuredData = $this->processWithAI($extractedText);
+            $structuredData = $this->processWithAIHaiku($extractedText);
+            //$structuredData = $this->processWithAILlama($extractedText);
 
             dd($structuredData);
 
@@ -83,7 +84,7 @@ class ReceiptController extends Controller
 
     }
 
-    protected function processWithAI($text)
+    protected function processWithAIHaiku($text)
     {
         $url = 'https://api.anthropic.com/v1/messages';
         $apiKey = env('ANTHROPIC_API_KEY');
@@ -134,6 +135,76 @@ class ReceiptController extends Controller
 
         $result = json_decode($response, true);
         return json_decode($result['content'][0]['text'], true);
+    }
+
+    protected function processWithAILlama($text)
+    {
+        $url = 'https://api.together.xyz/v1/chat/completions';
+        $apiKey = env('TOGETHER_API_KEY');
+
+        $data = [
+            'model' => 'meta-llama/Llama-Vision-Free',
+            'messages' => [
+                [
+                    'role' => 'user',
+                    'content' => [
+                        [
+                            'type' => 'text',
+                            'text' => "Given the following raw text extracted from a receipt, please analyze and structure it into a JSON format with the following fields:
+                            - merchant_name: The name of the store/business
+                            - date: The receipt date
+                            - total_amount: The total amount paid
+                            - items: Array of items purchased with their prices
+                            - tax_amount: Tax amount if present
+                            - payment_method: Payment method if mentioned
+
+                            Raw receipt text:
+                            --------------------------------------------------
+                            $text
+                            --------------------------------------------------
+
+                            Please return only the JSON structure without any additional text or explanation."
+                        ]
+                    ]
+                ]
+            ],
+            'max_tokens' => null,
+            'temperature' => 0.7,
+            'top_p' => 0.7,
+            'top_k' => 50,
+            'repetition_penalty' => 1,
+            'stop' => ['<|eot_id|>', '<|eom_id|>'],
+            'stream' => false
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($data),
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json'
+            ]
+        ]);
+
+        $response = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($err) {
+            throw new \Exception('cURL Error: ' . $err);
+        }
+
+        $result = json_decode($response, true);
+        
+        // Get the content from the chat completion response
+        $jsonText = $result['choices'][0]['message']['content'];
+        
+        // Clean the response to ensure it's valid JSON
+        $jsonText = preg_replace('/```json\s*|\s*```/', '', $jsonText);
+        
+        return json_decode($jsonText, true);
     }
 
     // Add other methods as needed...
